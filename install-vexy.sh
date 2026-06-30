@@ -65,16 +65,35 @@ apply_branding() {
     # Update wrapper blade title
     WRAPPER="$PANEL_PATH/resources/views/templates/wrapper.blade.php"
     if [[ -f "$WRAPPER" ]]; then
-        sed -i 's/Hyper Game Panel/Avtix Game Panel/g' "$WRAPPER"
-        sed -i 's/Hyper Panel/Avtix Game Panel/g' "$WRAPPER"
-        sed -i 's/DGEN_HYPER/AVTIX/g' "$WRAPPER"
+        sed -i "s/Pterodactyl Panel/Avtix Game Panel/g" "$WRAPPER"
+        sed -i "s/config('app.name', 'Pterodactyl')/config('app.name', 'Avtix Game Panel')/g" "$WRAPPER"
+        sed -i "s/config('app.name', \"Pterodactyl\")/config('app.name', 'Avtix Game Panel')/g" "$WRAPPER"
+        sed -i 's/>Pterodactyl</>Avtix</g' "$WRAPPER"
     fi
 
-    # Update blade base template
-    BASE="$PANEL_PATH/resources/views/templates/base.blade.php"
-    if [[ -f "$BASE" ]]; then
-        sed -i 's/Hyper Game Panel/Avtix Game Panel/g' "$BASE"
-    fi
+    # Replace in all blade views
+    find "$PANEL_PATH/resources/views" -name '*.blade.php' -exec sed -i 's/Pterodactyl Panel/Avtix Game Panel/g; s/>Pterodactyl</>Avtix</g' {} \; 2>/dev/null || true
+
+    # Replace in DGEN lang files
+    find "$PANEL_PATH/public/DGEN" -name '*.json' -exec sed -i 's/Pterodactyl/Avtix/g' {} \; 2>/dev/null || true
+
+    # Fix JS branding
+    python3 << 'PYEOF'
+import os, glob
+fixes = {
+    'HyperThemeSettings': [('Copyright Identity', 'Copyright Avtix'), ('Copyright Suffix', 'Copyright Avtix')],
+    'AccountOverviewContainer': [('DGEN account connection', 'Avtix account connection'), ('DGEN account link', 'Avtix account link'), ('Connect DGEN', 'Connect Avtix'), ('DGEN', 'Avtix')],
+    'AddonSettings': [('DGEN sign-in is managed', 'SSO sign-in is managed'), ('DGEN', 'Avtix')],
+}
+for pattern, reps in fixes.items():
+    for js_file in glob.glob(f'/var/www/pterodactyl/public/assets/{pattern}*.js'):
+        with open(js_file, 'r') as f: c = f.read()
+        orig = c
+        for old, new in reps: c = c.replace(old, new)
+        if c != orig:
+            with open(js_file, 'w') as f: f.write(c)
+            print(f'  {os.path.basename(js_file)}: patched')
+PYEOF
 
     green "  Branding applied"
 }
@@ -209,6 +228,90 @@ server {
     location = /api/client/staff-request {
         default_type application/json;
         return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}';
+    }
+
+    # ═══ BILLING INTERCEPTS ═══
+    location = /api/client/addons/billing/balance {
+        default_type application/json;
+        return 200 '{"balance":0,"currency":"USD"}';
+    }
+    location = /api/client/addons/billing/discount {
+        default_type application/json;
+        return 200 '{"discount":0}';
+    }
+    location = /api/client/addons/billing/order/create {
+        default_type application/json;
+        return 200 '{"success":true,"message":"Order created"}';
+    }
+    location = /api/client/addons/billing/promocodes/validate {
+        default_type application/json;
+        return 200 '{"valid":false,"discount":0}';
+    }
+    location = /api/client/addons/billing/referral {
+        default_type application/json;
+        return 200 '{"code":"","balance":0,"referrals":0,"total_earned":0,"referral_link":""}';
+    }
+    location = /api/client/addons/billing/referral/code {
+        default_type application/json;
+        return 200 '{"code":"","updated":true}';
+    }
+    location = /api/client/addons/billing/referral/withdraw {
+        default_type application/json;
+        return 200 '{"success":false,"error":"Withdrawals not available"}';
+    }
+    location = /api/client/addons/billing/services {
+        default_type application/json;
+        return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}';
+    }
+    location = /api/client/addons/billing/store/categories {
+        default_type application/json;
+        return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}';
+    }
+    location = /api/client/addons/billing/top-up {
+        default_type application/json;
+        return 200 '{"success":true,"message":"Top-up initiated"}';
+    }
+    location = /api/client/addons/billing/verify {
+        default_type application/json;
+        return 200 '{"verified":true}';
+    }
+
+    # ═══ ADDON DATA INTERCEPTS (return empty data) ═══
+    location = /api/client/addons/DGEN/server-stats {
+        default_type application/json;
+        return 200 '{"data":{"cpu":0,"memory":0,"disk":0,"uptime":0}}';
+    }
+    location = /api/client/addons/node-status {
+        default_type application/json;
+        return 200 '{"data":[]}';
+    }
+    location = /api/client/addons/node-status/monitors {
+        default_type application/json;
+        return 200 '{"data":[]}';
+    }
+    location = /api/client/addons/wings/check-status {
+        default_type application/json;
+        return 200 '{"connected":true,"status":"online"}';
+    }
+    location = /api/client/permissions {
+        default_type application/json;
+        return 200 '{"data":[]}';
+    }
+    location = /api/client/theme/hyperv2/update {
+        default_type application/json;
+        return 200 '{"success":true}';
+    }
+    location = /api/client/theme/hyperv2/notifications/broadcast {
+        default_type application/json;
+        return 200 '{"data":[]}';
+    }
+    location = /api/client/theme/hyperv2/sso/disconnect {
+        default_type application/json;
+        return 200 '{"success":true}';
+    }
+    location = /api/client/theme/hyperv2/sso/exchange {
+        default_type application/json;
+        return 200 '{"success":true}';
     }
 
     # ═══ MAIN ROUTING ═══
