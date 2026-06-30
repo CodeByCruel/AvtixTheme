@@ -142,203 +142,159 @@ write_nginx_config() {
     # Backup existing config
     cp "$NGINX_CONF" "${NGINX_CONF}.bak.$(date +%s)"
 
-    # Write new config
-    cat > "$NGINX_CONF" <<NGINXEOF
+    # Write the complete nginx config to a temp file, then replace server_name
+    TMPCONF=$(mktemp)
+    cat > "$TMPCONF" <<'CONF'
 server {
     listen 80;
     listen [::]:80;
-    server_name $SERVER_NAME;
+    server_name __SERVER_NAME__;
     root /var/www/pterodactyl/public;
     index index.html index.php;
     charset utf-8;
     client_max_body_size 100m;
     fastcgi_buffers 16 16k;
     fastcgi_buffer_size 32k;
-
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
 
-    # ═══ LICENSE INTERCEPTS (bypass DGEN checks) ═══
-    location = /api/public/license/verify {
-        default_type application/json;
-        return 200 '{"valid":true,"verified_at":"$(date -u +%Y-%m-%dT%H:%M:%S+00:00)","reason":null,"community":false,"edition":"ultimate","license":{"ultimate_features":true,"premium_features":true,"basic_features":true,"minecraft_features":true,"fivem_features":true,"essentials_features":true,"special_features":true,"private_features":true,"ark_features":true,"hytale_features":true}}';
-    }
-    location = /api/public/license/status {
-        default_type application/json;
-        return 200 '{"configured":true,"domain":"$SERVER_NAME"}';
-    }
-    location = /api/public/license/clear-cache {
-        default_type application/json;
-        return 200 '{"success":true}';
-    }
-    location = /api/public/license/clear-all-cache {
-        default_type application/json;
-        return 200 '{"success":true}';
-    }
+    # === LICENSE ===
+    location = /api/public/license/verify { default_type application/json; return 200 '{"valid":true,"community":false,"edition":"ultimate","license":{"ultimate_features":true,"premium_features":true,"basic_features":true,"minecraft_features":true,"fivem_features":true,"essentials_features":true,"special_features":true,"private_features":true,"ark_features":true,"hytale_features":true}}'; }
+    location = /api/public/license/status { default_type application/json; return 200 '{"configured":true,"domain":"__SERVER_NAME__"}'; }
+    location = /api/public/license/clear-cache { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/public/license/clear-all-cache { default_type application/json; return 200 '{"success":true}'; }
 
-    # ═══ DISCORD/DGEN VERIFICATION INTERCEPTS ═══
-    location = /api/client/discord-verification {
-        default_type application/json;
-        return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}';
-    }
-    location = /api/client/discord-verification/account {
-        default_type application/json;
-        return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}';
-    }
-    location = /api/client/discord-verification/account/refresh {
-        default_type application/json;
-        return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}';
-    }
-    location = /api/client/discord-verification/refresh {
-        default_type application/json;
-        return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}';
-    }
+    # === DISCORD/DGEN ===
+    location = /api/client/discord-verification { default_type application/json; return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}'; }
+    location = /api/client/discord-verification/account { default_type application/json; return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}'; }
+    location = /api/client/discord-verification/account/refresh { default_type application/json; return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}'; }
+    location = /api/client/discord-verification/refresh { default_type application/json; return 200 '{"requires_dgen":true,"dgen_connected":true,"requires_discord":false,"discord_connected":true,"in_discord_server":true,"invite_link":"https://discord.gg/avtix"}'; }
 
-    # ═══ SSO/INFO INTERCEPT (prevents DGEN popup) ═══
-    location = /api/client/theme/hyperv2/sso/info {
-        default_type application/json;
-        return 200 '{"license":{"tier":"ultimate","status":"valid","community":false,"edition":"ultimate","features":{"ultimate_features":true,"premium_features":true,"basic_features":true,"minecraft_features":true,"fivem_features":true,"essentials_features":true,"special_features":true,"private_features":true,"ark_features":true,"hytale_features":true}},"sso_connected":true,"sso":true,"dgen_connected":true,"discord_connected":true,"panel_url":"http://$SERVER_NAME","branding":{"site_name":"Avtix Game Panel"}}';
-    }
+    # === THEME/HYPER ===
+    location = /api/client/theme/hyperv2/sso/info { default_type application/json; return 200 '{"license":{"tier":"ultimate","status":"valid","community":false,"edition":"ultimate","features":{"ultimate_features":true}},"sso_connected":true,"sso":true,"dgen_connected":true,"discord_connected":true,"panel_url":"http://__SERVER_NAME__","branding":{"site_name":"Avtix Game Panel"}}'; }
+    location = /api/client/theme/hyperv2/sso/disconnect { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/theme/hyperv2/sso/exchange { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/theme/hyperv2 { default_type application/json; return 200 '{"theme":{"name":"hyperv2","version":"2.0.0","branding":{"site_name":"Avtix Game Panel","accent_color":"#6366f1"}},"site":{"name":"Avtix Game Panel","description":"Premium Game Server Hosting"},"license":{"tier":"ultimate","status":"valid","community":false},"features":{"all":true}}'; }
+    location = /api/client/theme/hyperv2/info { default_type application/json; return 200 '{"theme":{"name":"hyperv2","version":"2.0.0","branding":{"site_name":"Avtix Game Panel"}},"features":{"all":true},"license":{"tier":"ultimate","status":"valid","community":false}}'; }
+    location = /api/client/theme/hyperv2/version { default_type application/json; return 200 '{"version":"2.0.0","latest":"2.0.0","update_available":false}'; }
+    location = /api/client/theme/hyperv2/update { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/theme/hyperv2/notifications/broadcast { default_type application/json; return 200 '{"data":[]}'; }
 
-    # ═══ ADDON SETTINGS INTERCEPTS (SPA calls /api/client/addons when logged in) ═══
-    location = /api/client/addons {
-        default_type application/json;
-        return 200 '{"addons":{"UserRegister":{"enabled":true},"database-manager":{"enabled":true},"Notifications":{"enabled":true},"SubdomainManager":{"enabled":true},"staff-request":{"enabled":true},"server-importer":{"enabled":true},"custom-mod-manager":{"enabled":true},"github-source-control":{"enabled":true},"server-splitter":{"enabled":true},"server-type-changer":{"enabled":true},"startup-presets":{"enabled":true},"schedule-presets":{"enabled":true},"AccountInfoUpdate":{"enabled":true},"CloudflareTurnstile":{"enabled":false},"upload-from-url":{"enabled":true},"console-log-upload":{"enabled":true},"command-history":{"enabled":true}},"updated_at":null,"app_url":"http://$SERVER_NAME"}';
-    }
-    location = /api/client/theme/hyperv2/addon-settings {
-        default_type application/json;
-        return 200 '{"addons":{"UserRegister":{"enabled":true},"database-manager":{"enabled":true},"Notifications":{"enabled":true},"SubdomainManager":{"enabled":true},"staff-request":{"enabled":true},"server-importer":{"enabled":true},"custom-mod-manager":{"enabled":true},"github-source-control":{"enabled":true},"server-splitter":{"enabled":true},"server-type-changer":{"enabled":true},"startup-presets":{"enabled":true},"schedule-presets":{"enabled":true},"AccountInfoUpdate":{"enabled":true},"CloudflareTurnstile":{"enabled":false},"upload-from-url":{"enabled":true},"console-log-upload":{"enabled":true},"command-history":{"enabled":true}},"updated_at":null,"app_url":"http://$SERVER_NAME"}';
-    }
+    # === ADDONS ===
+    location = /api/client/addons { default_type application/json; return 200 '{"addons":{"UserRegister":{"enabled":true},"database-manager":{"enabled":true},"Notifications":{"enabled":true},"SubdomainManager":{"enabled":true},"staff-request":{"enabled":true},"server-importer":{"enabled":true},"custom-mod-manager":{"enabled":true},"github-source-control":{"enabled":true},"server-splitter":{"enabled":true},"server-type-changer":{"enabled":true},"startup-presets":{"enabled":true},"schedule-presets":{"enabled":true},"AccountInfoUpdate":{"enabled":true},"CloudflareTurnstile":{"enabled":false},"upload-from-url":{"enabled":true},"console-log-upload":{"enabled":true},"command-history":{"enabled":true}},"updated_at":null,"app_url":"http://__SERVER_NAME__"}'; }
+    location = /api/client/theme/hyperv2/addon-settings { default_type application/json; return 200 '{"addons":{"UserRegister":{"enabled":true},"database-manager":{"enabled":true},"Notifications":{"enabled":true},"SubdomainManager":{"enabled":true},"staff-request":{"enabled":true},"server-importer":{"enabled":true},"custom-mod-manager":{"enabled":true},"github-source-control":{"enabled":true},"server-splitter":{"enabled":true},"server-type-changer":{"enabled":true},"startup-presets":{"enabled":true},"schedule-presets":{"enabled":true},"AccountInfoUpdate":{"enabled":true},"CloudflareTurnstile":{"enabled":false},"upload-from-url":{"enabled":true},"console-log-upload":{"enabled":true},"command-history":{"enabled":true}},"updated_at":null,"app_url":"http://__SERVER_NAME__"}'; }
+    location = /api/client/addons/defaults { default_type application/json; return 200 '{"addons":{}}'; }
+    location = /api/client/addons/export-raw { default_type application/json; return 200 '{"addons":{}}'; }
 
-    # ═══ THEME INFO INTERCEPTS ═══
-    location = /api/client/theme/hyperv2 {
-        default_type application/json;
-        return 200 '{"theme":{"name":"hyperv2","version":"2.0.0","branding":{"site_name":"Avtix Game Panel","accent_color":"#6366f1"}},"site":{"name":"Avtix Game Panel","description":"Premium Game Server Hosting"},"license":{"tier":"ultimate","status":"valid","community":false},"features":{"all":true}}';
-    }
-    location = /api/client/theme/hyperv2/info {
-        default_type application/json;
-        return 200 '{"theme":{"name":"hyperv2","version":"2.0.0","branding":{"site_name":"Avtix Game Panel"}},"features":{"all":true},"license":{"tier":"ultimate","status":"valid","community":false}}';
-    }
-    location = /api/client/theme/hyperv2/version {
-        default_type application/json;
-        return 200 '{"version":"2.0.0","latest":"2.0.0","update_available":false}';
-    }
+    # === BILLING ===
+    location = /api/client/addons/billing/balance { default_type application/json; return 200 '{"balance":0,"currency":"USD"}'; }
+    location = /api/client/addons/billing/discount { default_type application/json; return 200 '{"discount":0}'; }
+    location = /api/client/addons/billing/order/create { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/billing/promocodes/validate { default_type application/json; return 200 '{"valid":false,"discount":0}'; }
+    location = /api/client/addons/billing/referral { default_type application/json; return 200 '{"code":"","balance":0,"referrals":0,"total_earned":0,"referral_link":""}'; }
+    location = /api/client/addons/billing/referral/code { default_type application/json; return 200 '{"code":"","updated":true}'; }
+    location = /api/client/addons/billing/referral/withdraw { default_type application/json; return 200 '{"success":false,"error":"Not available"}'; }
+    location = /api/client/addons/billing/services { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/addons/billing/store/categories { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/addons/billing/top-up { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/billing/verify { default_type application/json; return 200 '{"verified":true}'; }
 
-    # ═══ STAFF-REQUEST INTERCEPT ═══
-    location = /api/client/staff-request {
-        default_type application/json;
-        return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}';
-    }
+    # === ADDON FEATURES ===
+    location = /api/client/addons/DGEN/server-stats { default_type application/json; return 200 '{"data":{"cpu":0,"memory":0,"disk":0,"uptime":0}}'; }
+    location = /api/client/addons/node-status { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/node-status/monitors { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/wings/check-status { default_type application/json; return 200 '{"connected":true,"status":"online"}'; }
+    location = /api/client/addons/ddos-alert/attacks { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/ddos-alert/charts { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/ddos-alert/summary { default_type application/json; return 200 '{"data":{"total_attacks":0,"blocked":0,"active":0}}'; }
+    location = /api/client/addons/ddos-alert/sync-now { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/discord-bot/bot-status { default_type application/json; return 200 '{"connected":false,"status":"offline"}'; }
+    location = /api/client/addons/discord-bot/restart { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/discord-bot/stats { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/discord-bot/sync { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/github-source-control/account { default_type application/json; return 200 '{"connected":false}'; }
+    location = /api/client/addons/github-source-control/repositories { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/upload-from-url/query { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/reverse-proxy/search { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/reverse-proxy/whitelist { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-importer/test-connection { default_type application/json; return 200 '{"success":true,"message":"Connection successful"}'; }
+    location = /api/client/addons/server-splitter/hook { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-splitter/search { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-splitter/users { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-splitter/whitelist { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-splitter/legacy-splits { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-splitter/legacy-splits/migrate { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/server-type-changer/whitelist { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/server-type-changer/whitelist/search { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/subdomain-manager/fetch-all-subdomains { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/subdomain-manager/fetch-domains { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/addons/subdomain-manager/test-connection { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/fastdl-nginx/setup { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/fastdl-nginx/remove { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/addons/staff-request/my-servers { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/addons/staff-request/owner-requests { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/addons/staff-request/requests { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/addons/staff-request/requests/count { default_type application/json; return 200 '{"count":0}'; }
+    location = /api/client/addons/staff-request/servers { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
 
-    # ═══ BILLING INTERCEPTS ═══
-    location = /api/client/addons/billing/balance {
-        default_type application/json;
-        return 200 '{"balance":0,"currency":"USD"}';
-    }
-    location = /api/client/addons/billing/discount {
-        default_type application/json;
-        return 200 '{"discount":0}';
-    }
-    location = /api/client/addons/billing/order/create {
-        default_type application/json;
-        return 200 '{"success":true,"message":"Order created"}';
-    }
-    location = /api/client/addons/billing/promocodes/validate {
-        default_type application/json;
-        return 200 '{"valid":false,"discount":0}';
-    }
-    location = /api/client/addons/billing/referral {
-        default_type application/json;
-        return 200 '{"code":"","balance":0,"referrals":0,"total_earned":0,"referral_link":""}';
-    }
-    location = /api/client/addons/billing/referral/code {
-        default_type application/json;
-        return 200 '{"code":"","updated":true}';
-    }
-    location = /api/client/addons/billing/referral/withdraw {
-        default_type application/json;
-        return 200 '{"success":false,"error":"Withdrawals not available"}';
-    }
-    location = /api/client/addons/billing/services {
-        default_type application/json;
-        return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}';
-    }
-    location = /api/client/addons/billing/store/categories {
-        default_type application/json;
-        return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}';
-    }
-    location = /api/client/addons/billing/top-up {
-        default_type application/json;
-        return 200 '{"success":true,"message":"Top-up initiated"}';
-    }
-    location = /api/client/addons/billing/verify {
-        default_type application/json;
-        return 200 '{"verified":true}';
-    }
+    # === ACCOUNT ===
+    location = /api/client/account { default_type application/json; return 200 '{"object":"user","attributes":{"id":1,"admin":true,"username":"admin","email":"admin@avtix.tech","root_admin":true,"use_totp":false,"created_at":"2026-01-01T00:00:00+00:00"}}'; }
+    location = /api/client/account/info { default_type application/json; return 200 '{"object":"user","attributes":{"id":1,"admin":true,"username":"admin","email":"admin@avtix.tech","root_admin":true}}'; }
+    location = /api/client/account/activity { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/account/api-keys { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/account/login-activity { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/account/password { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/account/two-factor { default_type application/json; return 200 '{"enabled":false}'; }
+    location = /api/client/account/two-factor/disable { default_type application/json; return 200 '{"success":true}'; }
+    location = /api/client/account/ssh-keys { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/account/ssh-keys/remove { default_type application/json; return 200 '{"success":true}'; }
 
-    # ═══ ADDON DATA INTERCEPTS (return empty data) ═══
-    location = /api/client/addons/DGEN/server-stats {
-        default_type application/json;
-        return 200 '{"data":{"cpu":0,"memory":0,"disk":0,"uptime":0}}';
-    }
-    location = /api/client/addons/node-status {
-        default_type application/json;
-        return 200 '{"data":[]}';
-    }
-    location = /api/client/addons/node-status/monitors {
-        default_type application/json;
-        return 200 '{"data":[]}';
-    }
-    location = /api/client/addons/wings/check-status {
-        default_type application/json;
-        return 200 '{"connected":true,"status":"online"}';
-    }
-    location = /api/client/permissions {
-        default_type application/json;
-        return 200 '{"data":[]}';
-    }
-    location = /api/client/theme/hyperv2/update {
-        default_type application/json;
-        return 200 '{"success":true}';
-    }
-    location = /api/client/theme/hyperv2/notifications/broadcast {
-        default_type application/json;
-        return 200 '{"data":[]}';
-    }
-    location = /api/client/theme/hyperv2/sso/disconnect {
-        default_type application/json;
-        return 200 '{"success":true}';
-    }
-    location = /api/client/theme/hyperv2/sso/exchange {
-        default_type application/json;
-        return 200 '{"success":true}';
-    }
+    # === SERVERS/CLIENT ===
+    location = /api/client/servers { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client/servers/status-filter { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/permissions { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/staff-request { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+    location = /api/client { default_type application/json; return 200 '{}'; }
 
-    # ═══ MAIN ROUTING ═══
+    # === ADMIN ===
+    location = /api/client/admin/addons/server-type-changer/all-nests-eggs { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/application/nodes { default_type application/json; return 200 '{"object":"list","data":[],"meta":{"pagination":{"total":0,"count":0,"per_page":50,"current_page":1,"total_pages":1,"links":{}}}}'; }
+
+    # === PUBLIC ===
+    location = /api/public/auth-addon-settings { default_type application/json; return 200 '{"addons":{"UserRegister":{"enabled":true}},"updated_at":null,"app_url":"http://__SERVER_NAME__"}'; }
+    location = /api/public/node-status { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/public/pwa/manifest.json { default_type application/json; return 200 '{"name":"Avtix Game Panel","short_name":"Avtix","start_url":"/","display":"standalone","background_color":"#0c0a09","theme_color":"#df3050"}'; }
+
+    # === MAIN ROUTING ===
     location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
+        try_files $uri $uri/ /index.php?$query_string;
     }
     location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
+    location = /robots.txt { access_log off; log_not_found off; }
     access_log off;
     error_log /var/log/nginx/pterodactyl.app-error.log error;
 
-    location ~ \.php\$ {
-        fastcgi_split_path_info ^(.+\.php)(/.+)\$;
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
         fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_index index.php;
         include fastcgi_params;
-        fastcgi_param PHP_VALUE "upload_max_filesize = 100M \\n post_max_size=100M";
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param PHP_VALUE "upload_max_filesize = 100M \n post_max_size=100M";
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param HTTP_PROXY "http";
         fastcgi_intercept_errors off;
         fastcgi_buffer_size 16k;
         fastcgi_buffers 4 16k;
         fastcgi_param HTTPS off;
     }
-    location ~ /\.(?!well-known).* { deny all; }
+
+    location ~ /\.well-known { deny all; }
+    location ~ /\. { deny all; }
 }
-NGINXEOF
+CONF
+    sed -i "s/__SERVER_NAME__/$SERVER_NAME/g" "$TMPCONF"
+    cp "$TMPCONF" "$NGINX_CONF"
+    rm -f "$TMPCONF"
 
     # Add SSL server block if SSL was configured
     if $HAS_SSL; then
@@ -359,7 +315,7 @@ SSLEOF
     # Test and reload
     nginx -t 2>&1
     systemctl reload nginx 2>/dev/null || nginx -s reload
-    green "  Nginx config written and reloaded"
+    green "  Nginx config written with 93 location blocks"
 }
 
 # ─── Configure database ───────────────────────────────────────
