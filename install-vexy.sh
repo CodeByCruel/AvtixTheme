@@ -42,7 +42,7 @@ php() { php8.4 "$@" 2>/dev/null || php "$@"; }
 
 # ─── Install hyper-utility ────────────────────────────────────
 install_hyper_utility() {
-    bold "[1/5] Downloading hyper-utility..."
+    bold "[1/6] Downloading hyper-utility..."
     if [[ ! -f "$HYPER_UTIL" ]] || [[ $(stat -c%s "$HYPER_UTIL" 2>/dev/null || echo 0) -lt 1000000 ]]; then
         curl -fSL --retry 3 --progress-bar -o "$HYPER_UTIL" "$HYPER_UTIL_URL"
         chmod +x "$HYPER_UTIL"
@@ -52,7 +52,7 @@ install_hyper_utility() {
 
 # ─── Run hyper-utility (installs real DGEN theme) ─────────────
 run_hyper_utility() {
-    bold "[2/5] Installing DGEN/Hyper theme..."
+    bold "[2/6] Installing DGEN/Hyper theme..."
     cd /tmp
     echo "" | "$HYPER_UTIL" 2>&1 | tail -20
     green "  DGEN theme installed"
@@ -60,7 +60,7 @@ run_hyper_utility() {
 
 # ─── Apply custom branding ────────────────────────────────────
 apply_branding() {
-    bold "[3/5] Applying Avtix branding..."
+    bold "[3/6] Applying Avtix branding..."
 
     # Update wrapper blade title
     WRAPPER="$PANEL_PATH/resources/views/templates/wrapper.blade.php"
@@ -98,9 +98,31 @@ PYEOF
     green "  Branding applied"
 }
 
+# ─── Generate SPA shell HTML for middleware-blocked pages ──────
+generate_spa_shell() {
+    bold "[4/6] Generating SPA shell for middleware-blocked pages..."
+
+    # Capture the live SPA shell from the panel (login page works via PHP)
+    SHELL_HTML=$(curl -s http://localhost/ 2>/dev/null)
+
+    if [[ -z "$SHELL_HTML" ]]; then
+        red "  Warning: Could not fetch live SPA shell, using existing one"
+        return
+    fi
+
+    # Apply Avtix branding to the shell
+    SHELL_HTML=$(echo "$SHELL_HTML" | sed \
+        -e 's/Hyper Game Panel/Avtix Game Panel/g' \
+        -e 's/Pterodactyl Software/Avtix/g' \
+        -e 's/>Pterodactyl</>Avtix</g')
+
+    echo "$SHELL_HTML" > "$PANEL_PATH/public/spa-shell.html"
+    green "  SPA shell generated ($(wc -c < "$PANEL_PATH/public/spa-shell.html") bytes)"
+}
+
 # ─── Write nginx config with license intercepts ───────────────
 write_nginx_config() {
-    bold "[4/5] Writing nginx config with license intercepts..."
+    bold "[5/6] Writing nginx config with license intercepts..."
 
     # Find the existing nginx config file
     NGINX_CONF=""
@@ -179,12 +201,15 @@ server {
     location = /api/client/theme/hyperv2/version { default_type application/json; return 200 '{"version":"2.0.0","latest":"2.0.0","update_available":false}'; }
     location = /api/client/theme/hyperv2/update { default_type application/json; return 200 '{"success":true}'; }
     location = /api/client/theme/hyperv2/notifications/broadcast { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/theme/hyperv2/sidebar { default_type application/json; return 200 '{"data":[]}'; }
+    location = /api/client/theme/hyperv2/check-server-availability { default_type application/json; return 200 '{"available":true}'; }
 
     # === ADDONS ===
     location = /api/client/addons { default_type application/json; return 200 '{"addons":{"UserRegister":{"enabled":true},"database-manager":{"enabled":true},"Notifications":{"enabled":true},"SubdomainManager":{"enabled":true},"staff-request":{"enabled":true},"server-importer":{"enabled":true},"custom-mod-manager":{"enabled":true},"github-source-control":{"enabled":true},"server-splitter":{"enabled":true},"server-type-changer":{"enabled":true},"startup-presets":{"enabled":true},"schedule-presets":{"enabled":true},"AccountInfoUpdate":{"enabled":true},"CloudflareTurnstile":{"enabled":false},"upload-from-url":{"enabled":true},"console-log-upload":{"enabled":true},"command-history":{"enabled":true}},"updated_at":null,"app_url":"http://__SERVER_NAME__"}'; }
     location = /api/client/theme/hyperv2/addon-settings { default_type application/json; return 200 '{"addons":{"UserRegister":{"enabled":true},"database-manager":{"enabled":true},"Notifications":{"enabled":true},"SubdomainManager":{"enabled":true},"staff-request":{"enabled":true},"server-importer":{"enabled":true},"custom-mod-manager":{"enabled":true},"github-source-control":{"enabled":true},"server-splitter":{"enabled":true},"server-type-changer":{"enabled":true},"startup-presets":{"enabled":true},"schedule-presets":{"enabled":true},"AccountInfoUpdate":{"enabled":true},"CloudflareTurnstile":{"enabled":false},"upload-from-url":{"enabled":true},"console-log-upload":{"enabled":true},"command-history":{"enabled":true}},"updated_at":null,"app_url":"http://__SERVER_NAME__"}'; }
     location = /api/client/addons/defaults { default_type application/json; return 200 '{"addons":{}}'; }
     location = /api/client/addons/export-raw { default_type application/json; return 200 '{"addons":{}}'; }
+    location = /api/client/addons/check-server-availability { default_type application/json; return 200 '{"available":true}'; }
 
     # === BILLING ===
     location = /api/client/addons/billing/balance { default_type application/json; return 200 '{"balance":0,"currency":"USD"}'; }
@@ -265,43 +290,24 @@ server {
     location = /api/public/node-status { default_type application/json; return 200 '{"data":[]}'; }
     location = /api/public/pwa/manifest.json { default_type application/json; return 200 '{"name":"Avtix Game Panel","short_name":"Avtix","start_url":"/","display":"standalone","background_color":"#0c0a09","theme_color":"#df3050"}'; }
 
-    # === SPA PAGE ROUTES (blocked by Hyper middleware when served via PHP) ===
-    # Proxy these to / which serves the SPA shell; JS router handles component
-    location /addons/ {
-        proxy_pass http://127.0.0.1/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location /billing/ {
-        proxy_pass http://127.0.0.1/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location = /server-importer {
-        proxy_pass http://127.0.0.1/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location = /server-splitter {
-        proxy_pass http://127.0.0.1/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    location = /server-wiper {
-        proxy_pass http://127.0.0.1/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    # === SPA PAGE ROUTES (bypass Hyper middleware 403) ===
+    # These page routes are blocked by the ionCube HyperV2LicenseGate middleware.
+    # Serve the static SPA shell instead; the JS router handles client-side routing.
+    location = /addons/node-status { try_files /spa-shell.html =404; }
+    location = /addons/node-status/monitors { try_files /spa-shell.html =404; }
+    location = /addons/custom-mod-manager { try_files /spa-shell.html =404; }
+    location = /billing { try_files /spa-shell.html =404; }
+    location = /billing/services { try_files /spa-shell.html =404; }
+    location = /billing/store { try_files /spa-shell.html =404; }
+    location = /server-importer { try_files /spa-shell.html =404; }
+    location = /server-splitter { try_files /spa-shell.html =404; }
+    location = /addons/server-importer { try_files /spa-shell.html =404; }
+    location = /addons/server-splitter { try_files /spa-shell.html =404; }
+    location = /addons/reverse-proxy { try_files /spa-shell.html =404; }
+    location = /addons/fastdl-nginx { try_files /spa-shell.html =404; }
+    location = /addons/network-statistics { try_files /spa-shell.html =404; }
+    location = /addons/firewall-manager { try_files /spa-shell.html =404; }
+    location = /addons/DGEN/fastdl { try_files /spa-shell.html =404; }
 
     # === MAIN ROUTING ===
     location / {
@@ -353,12 +359,12 @@ SSLEOF
     # Test and reload
     nginx -t 2>&1
     systemctl reload nginx 2>/dev/null || nginx -s reload
-    green "  Nginx config written with 93 location blocks"
+    green "  Nginx config written with license intercepts + SPA page routes"
 }
 
 # ─── Configure database ───────────────────────────────────────
 configure_database() {
-    bold "[5/5] Configuring database..."
+    bold "[6/6] Configuring database..."
 
     # Enable registration
     php8.4 -r "
@@ -368,18 +374,37 @@ configure_database() {
         \$pdo->exec(\"INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('settings::auth:2fa_required', '0')\");
         \$pdo->exec(\"INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('settings::app:admin_theme', 'hyper')\");
 
-        // Enable all DGEN addons
         \$addons = json_encode([
-            'UserRegister' => ['enabled' => true],
-            'theme-settings' => ['enabled' => true],
-            'SiteAlerts' => ['enabled' => true, 'alerts' => []],
-            'Notifications' => ['enabled' => true, 'notifications' => ['serverEnabled' => false, 'soundsEnabled' => false]],
+            'addons' => [
+                'UserRegister' => ['enabled' => true],
+                'database-manager' => ['enabled' => true],
+                'Notifications' => ['enabled' => true],
+                'SubdomainManager' => ['enabled' => true],
+                'staff-request' => ['enabled' => true],
+                'server-importer' => ['enabled' => true],
+                'custom-mod-manager' => ['enabled' => true],
+                'github-source-control' => ['enabled' => true],
+                'server-splitter' => ['enabled' => true],
+                'server-type-changer' => ['enabled' => true],
+                'startup-presets' => ['enabled' => true],
+                'schedule-presets' => ['enabled' => true],
+                'AccountInfoUpdate' => ['enabled' => true],
+                'CloudflareTurnstile' => ['enabled' => false],
+                'upload-from-url' => ['enabled' => true],
+                'console-log-upload' => ['enabled' => true],
+                'command-history' => ['enabled' => true],
+            ],
+            'updated_at' => null,
+            'app_url' => '',
         ]);
-        \$pdo->exec(\"INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('settings::app:addons:hyperv2', '\" . addslashes(\$addons) . \"')\");
+        \$pdo->exec(\"INSERT INTO settings (\`key\`, \`value\`) VALUES ('settings::app:addons:hyperv2', '\" . addslashes(\$addons) . \"') ON DUPLICATE KEY UPDATE value=VALUES(value)\");
 
-        // Theme settings
-        \$theme = json_encode(['site_name' => 'Avtix Game Panel', 'accent_color' => '#6366f1']);
-        \$pdo->exec(\"INSERT IGNORE INTO settings (\`key\`, \`value\`) VALUES ('settings::app:theme:hyperv2', '\" . addslashes(\$theme) . \"')\");
+        \$theme = json_encode([
+            'site' => ['name' => 'Avtix Game Panel', 'meta' => null, 'description' => 'Premium Game Server Hosting'],
+            'variables' => [],
+            'enforce' => false,
+        ]);
+        \$pdo->exec(\"INSERT INTO settings (\`key\`, \`value\`) VALUES ('settings::app:theme:hyperv2', '\" . addslashes(\$theme) . \"') ON DUPLICATE KEY UPDATE value=VALUES(value)\");
 
         echo \"  Database configured\n\";
     } catch (PDOException \$e) {
@@ -415,6 +440,7 @@ do_install() {
     install_hyper_utility
     run_hyper_utility
     apply_branding
+    generate_spa_shell
     write_nginx_config
     configure_database
 
@@ -447,6 +473,7 @@ do_repair() {
     install_hyper_utility
     run_hyper_utility
     apply_branding
+    generate_spa_shell
     write_nginx_config
     configure_database
 
@@ -473,7 +500,7 @@ do_uninstall() {
     TMP=$(mktemp -d)
     git clone https://github.com/pterodactyl/panel.git "$TMP/vanilla" --depth 1
 
-    rm -rf "$PANEL_PATH/public/assets" "$PANEL_PATH/public/DGEN" 2>/dev/null || true
+    rm -rf "$PANEL_PATH/public/assets" "$PANEL_PATH/public/DGEN" "$PANEL_PATH/public/spa-shell.html" 2>/dev/null || true
     cp -rf "$TMP/vanilla/public/assets" "$PANEL_PATH/public/"
     rm -rf "$PANEL_PATH/resources/views" 2>/dev/null || true
     cp -rf "$TMP/vanilla/resources/views" "$PANEL_PATH/resources/"
