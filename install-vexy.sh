@@ -265,6 +265,44 @@ server {
     location = /api/public/node-status { default_type application/json; return 200 '{"data":[]}'; }
     location = /api/public/pwa/manifest.json { default_type application/json; return 200 '{"name":"Avtix Game Panel","short_name":"Avtix","start_url":"/","display":"standalone","background_color":"#0c0a09","theme_color":"#df3050"}'; }
 
+    # === SPA PAGE ROUTES (blocked by Hyper middleware when served via PHP) ===
+    # Proxy these to / which serves the SPA shell; JS router handles component
+    location /addons/ {
+        proxy_pass http://127.0.0.1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location /billing/ {
+        proxy_pass http://127.0.0.1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location = /server-importer {
+        proxy_pass http://127.0.0.1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location = /server-splitter {
+        proxy_pass http://127.0.0.1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location = /server-wiper {
+        proxy_pass http://127.0.0.1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # === MAIN ROUTING ===
     location / {
         try_files $uri $uri/ /index.php?$query_string;
